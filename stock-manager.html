@@ -77,21 +77,8 @@ async function checkSessionTimeout(emailKey) {
 
 // ===== 인증 =====
 function signIn() {
-  // 모바일 WebView 환경에서는 signInWithPopup이 차단되므로 redirect 방식 사용
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    auth.signInWithRedirect(provider).catch(err => alert('로그인 실패: ' + err.message));
-  } else {
-    auth.signInWithPopup(provider).catch(err => alert('로그인 실패: ' + err.message));
-  }
+  auth.signInWithPopup(provider).catch(err => alert('로그인 실패: ' + err.message));
 }
-
-// redirect 로그인 후 결과 처리
-auth.getRedirectResult().catch(err => {
-  if (err.code !== 'auth/no-current-user') {
-    alert('로그인 실패: ' + err.message);
-  }
-});
 function signOut() {
   const user = auth.currentUser;
   if (user) {
