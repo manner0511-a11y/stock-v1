@@ -243,11 +243,6 @@ tr:hover td { background: #263548; }
   /* 요약 카드 6개 → 2열 */
   #summary-cards { grid-template-columns: repeat(2, 1fr) !important; }
 
-  /* 손실 대응 시뮬레이션: 카드 3개 먼저, 차트 3개 나중 */
-  #sim-layout { display: flex !important; flex-direction: column; }
-  .sim-cards-row { order: 1; display: flex !important; flex-direction: column; }
-  .sim-charts-row { order: 2; display: flex !important; flex-direction: column; }
-
   /* 헤더 */
   .header { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 16px; }
   .header h1 { font-size: 16px; }
@@ -603,13 +598,10 @@ tr:hover td { background: #263548; }
     </div>
 
     <div id="sim-scenarios" style="display:none">
-      <!-- PC: 카드행 / 모바일: flex column으로 카드3개→차트3개 순서 -->
-      <div id="sim-layout" style="display:contents">
+      <div class="grid-3">
 
-        <!-- 카드 행 -->
-        <div class="grid-3 sim-cards-row">
-
-          <!-- 시나리오 1: 원금 증액 -->
+        <!-- 시나리오 1: 원금 증액 -->
+        <div>
           <div class="card">
             <div style="font-size:15px;font-weight:700;margin-bottom:4px">💰 원금 증액</div>
             <div style="font-size:12px;color:#64748b;margin-bottom:16px">원금을 늘려 T값을 희석하고 별지점%를 회복</div>
@@ -618,14 +610,19 @@ tr:hover td { background: #263548; }
               <input type="number" id="sim-new-principal" step="100" oninput="simCalcPrincipal()">
             </div>
             <div id="sim-principal-result" style="margin-top:8px"></div>
-            <!-- 빠른 선택 버튼 -->
             <div style="margin-top:12px">
               <div style="font-size:11px;color:#64748b;margin-bottom:6px">목표 별지점% 달성을 위한 필요 원금</div>
               <div style="display:flex;gap:6px;flex-wrap:wrap" id="sim-principal-targets"></div>
             </div>
           </div>
+          <div class="card" style="margin-top:0">
+            <div style="font-size:12px;color:#64748b;margin-bottom:8px">💰 원금 증액 → 별지점$ 변화</div>
+            <div style="position:relative;height:200px"><canvas id="sim-chart-principal"></canvas></div>
+          </div>
+        </div>
 
-          <!-- 시나리오 2: 손절 후 재시작 -->
+        <!-- 시나리오 2: 손절 후 재시작 -->
+        <div>
           <div class="card">
             <div style="font-size:15px;font-weight:700;margin-bottom:4px">✂️ 손절 후 재시작</div>
             <div style="font-size:12px;color:#64748b;margin-bottom:16px">현재 손절 시 손실 확정 후 새 사이클 회복 분석</div>
@@ -638,8 +635,14 @@ tr:hover td { background: #263548; }
             </div>
             <div id="sim-cutloss-result" style="margin-top:8px"></div>
           </div>
+          <div class="card" style="margin-top:0">
+            <div style="font-size:12px;color:#64748b;margin-bottom:8px">✂️ 새 사이클 수익률별 누적 손익</div>
+            <div style="position:relative;height:200px"><canvas id="sim-chart-cutloss"></canvas></div>
+          </div>
+        </div>
 
-          <!-- 시나리오 3: 버티기 -->
+        <!-- 시나리오 3: 버티기 -->
+        <div>
           <div class="card">
             <div style="font-size:15px;font-weight:700;margin-bottom:4px">⏳ 버티기</div>
             <div style="font-size:12px;color:#64748b;margin-bottom:16px">현재 보유 상태에서 별지점 도달에 필요한 주가</div>
@@ -652,20 +655,7 @@ tr:hover td { background: #263548; }
               <div id="sim-hold-extra-result"></div>
             </div>
           </div>
-
-        </div>
-
-        <!-- 차트 행 -->
-        <div class="grid-3 sim-charts-row" style="margin-top:0">
-          <div class="card">
-            <div style="font-size:12px;color:#64748b;margin-bottom:8px">💰 원금 증액 → 별지점$ 변화</div>
-            <div style="position:relative;height:200px"><canvas id="sim-chart-principal"></canvas></div>
-          </div>
-          <div class="card">
-            <div style="font-size:12px;color:#64748b;margin-bottom:8px">✂️ 새 사이클 수익률별 누적 손익</div>
-            <div style="position:relative;height:200px"><canvas id="sim-chart-cutloss"></canvas></div>
-          </div>
-          <div class="card">
+          <div class="card" style="margin-top:0">
             <div style="font-size:12px;color:#64748b;margin-bottom:8px">⏳ 추가 매수 금액 → 별지점$ / 평단가</div>
             <div style="position:relative;height:200px"><canvas id="sim-chart-hold"></canvas></div>
           </div>
