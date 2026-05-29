@@ -1133,19 +1133,42 @@ function renderCycleCard(c) {
     ? '<div style="text-align:center;color:#475569;padding:16px">거래 내역이 없습니다</div>'
     : (() => {
         let runningT = 0;
+        let runningCost = 0;
+        let runningQty = 0;
+        let runningInvested = 0;
+        const principal = c.principal;
+
         const rows = (c.trades||[]).map((t, i) => {
           const isBuy = t.type === 'buy';
+          const dailyAtTrade = getPrincipalAt(c, t.date) / c.split;
           const dailyAmt = t.price * t.qty;
-          const tDelta = dailyAmt / daily;
-          if (isBuy) runningT += tDelta;
-          else runningT -= tDelta;
+          const tDelta = dailyAmt / dailyAtTrade;
+
+          if (isBuy) {
+            runningT += tDelta;
+            runningCost += t.price * t.qty;
+            runningQty += t.qty;
+            runningInvested += t.price * t.qty;
+          } else {
+            runningT -= tDelta;
+            if (runningQty > 0) runningCost -= (runningCost / runningQty) * t.qty;
+            runningQty -= t.qty;
+          }
+
           const tVal = Math.max(0, runningT);
-          return { t, i, isBuy, dailyAmt, tVal };
+          const avgAfter = runningQty > 0 ? runningCost / runningQty : 0;
+          const starPctAfter = calcStarPoint(c.ticker, c.split, tVal);
+          const starPriceAfter = avgAfter > 0 ? avgAfter * (1 + starPctAfter) : 0;
+          const consumedPct = principal > 0 ? (runningInvested / principal * 100) : 0;
+
+          return { t, i, isBuy, dailyAmt, tVal, avgAfter, starPctAfter, starPriceAfter, consumedPct };
         });
+
         // 내림차순 (최신 거래가 위로)
         const reversedRows = [...rows].reverse();
-        const rowsHtml = reversedRows.map(({ t, i, isBuy, dailyAmt, tVal }) => {
+        const rowsHtml = reversedRows.map(({ t, i, isBuy, dailyAmt, tVal, avgAfter, starPctAfter, starPriceAfter, consumedPct }) => {
           const isSell = !isBuy;
+          const starPctColor = starPctAfter <= 0 ? '#ef4444' : starPctAfter < 0.05 ? '#f59e0b' : '#10b981';
           return `<tr style="${isSell ? 'background:#1a0a0a;' : ''}">
             <td style="color:#64748b;font-size:12px">${tVal.toFixed(4)}</td>
             <td>${t.date}</td>
@@ -1154,12 +1177,16 @@ function renderCycleCard(c) {
             <td style="text-align:right">${isSell ? '-' : ''}${t.qty}</td>
             <td style="text-align:right">$${dailyAmt.toFixed(2)}</td>
             <td style="color:#64748b">$${daily.toFixed(2)}</td>
+            <td style="color:#94a3b8">$${avgAfter.toFixed(2)}</td>
+            <td style="color:${starPctColor}">$${starPriceAfter.toFixed(2)}</td>
+            <td style="color:${starPctColor}">${(starPctAfter*100).toFixed(2)}%</td>
+            <td style="color:${consumedPct>=80?'#ef4444':consumedPct>=50?'#f59e0b':'#94a3b8'}">${consumedPct.toFixed(1)}%</td>
             <td><button class="btn btn-secondary btn-sm" onclick="openEditTrade('${c.id}',${i})">수정</button></td>
           </tr>`;
         });
         return `<div style="overflow-x:auto"><table>
           <thead><tr>
-            <th>누적(T)</th><th>날짜</th><th>구분</th><th>단가</th><th>개수</th><th>매수(일) 합계</th><th>기준 매매금액</th><th>수정</th>
+            <th>누적(T)</th><th>날짜</th><th>구분</th><th>단가</th><th>개수</th><th>매수(일) 합계</th><th>기준 매매금액</th><th>평단가</th><th>별지점$</th><th>별지점%</th><th>소진율%</th><th>수정</th>
           </tr></thead>
           <tbody>${rowsHtml.join('')}</tbody>
         </table></div>`;
