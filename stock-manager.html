@@ -979,11 +979,11 @@ async function fetchPrices() {
     if (data.marketState === 'PRE' && data.prePrice) {
       const pct = data.preChangePct ? (data.preChangePct >= 0 ? '+' : '') + data.preChangePct.toFixed(2) + '%' : '';
       extEl.innerHTML = `<span style="color:#94a3b8">프리 $${data.prePrice.toFixed(2)}</span> <span class="${data.preChangePct >= 0 ? 'positive' : 'negative'}">${pct}</span>`;
-    } else if ((data.marketState === 'POST' || data.marketState === 'CLOSED') && data.postPrice) {
+    } else if ((data.marketState === 'POST' || data.marketState === 'CLOSED' || data.marketState === 'POSTPOST') && data.postPrice) {
       const pct = data.postChangePct ? (data.postChangePct >= 0 ? '+' : '') + data.postChangePct.toFixed(2) + '%' : '';
       extEl.innerHTML = `<span style="color:#94a3b8">애프터 $${data.postPrice.toFixed(2)}</span> <span class="${data.postChangePct >= 0 ? 'positive' : 'negative'}">${pct}</span>`;
     } else {
-      extEl.textContent = data.marketState === 'REGULAR' ? '정규장' : '';
+      extEl.innerHTML = `<span style="color:#475569">${data.marketState || '정규장'}</span>`;
     }
   }
 
