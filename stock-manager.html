@@ -1140,6 +1140,11 @@ function renderCycleCard(c) {
           if (isBuy) runningT += tDelta;
           else runningT -= tDelta;
           const tVal = Math.max(0, runningT);
+          return { t, i, isBuy, dailyAmt, tVal };
+        });
+        // 내림차순 (최신 거래가 위로)
+        const reversedRows = [...rows].reverse();
+        const rowsHtml = reversedRows.map(({ t, i, isBuy, dailyAmt, tVal }) => {
           const isSell = !isBuy;
           return `<tr style="${isSell ? 'background:#1a0a0a;' : ''}">
             <td style="color:#64748b;font-size:12px">${tVal.toFixed(4)}</td>
@@ -1156,7 +1161,7 @@ function renderCycleCard(c) {
           <thead><tr>
             <th>누적(T)</th><th>날짜</th><th>구분</th><th>단가</th><th>개수</th><th>매수(일) 합계</th><th>기준 매매금액</th><th>수정</th>
           </tr></thead>
-          <tbody>${rows.join('')}</tbody>
+          <tbody>${rowsHtml.join('')}</tbody>
         </table></div>`;
       })();
 
