@@ -915,16 +915,24 @@ function todayLocal() {
   return `${y}-${m}-${day}`;
 }
 
-// ===== 주가 조회 (Yahoo Finance via allorigins 프록시, API Key 불필요) =====
-async function fetchPrice(symbol, retries = 2) {
-  for (let attempt = 0; attempt <= retries; attempt++) {
+// ===== 주가 조회 (다중 프록시 fallback) =====
+const PRICE_PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+async function fetchPrice(symbol) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+
+  for (const proxyFn of PRICE_PROXIES) {
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+      const proxyUrl = proxyFn(url);
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(5000) });
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      const outer = await res.json();
-      const data = JSON.parse(outer.contents);
+      const raw = await res.json();
+      // allorigins는 { contents: "..." }, 나머지는 직접 JSON
+      const data = raw.contents ? JSON.parse(raw.contents) : raw;
       const meta = data?.chart?.result?.[0]?.meta;
       if (!meta || !meta.regularMarketPrice) throw new Error('no data');
       const price = meta.regularMarketPrice;
@@ -933,9 +941,7 @@ async function fetchPrice(symbol, retries = 2) {
       const changePct = (change / prevClose) * 100;
       return { price, change, changePct, prevClose };
     } catch (e) {
-      if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
-      }
+      // 다음 프록시로
     }
   }
   return null;
@@ -2774,7 +2780,9 @@ function simCalcHold() {
         y: {
           title: { display: true, text: '주가 ($)', color: '#64748b', font: { size: 10 } },
           ticks: { color: '#64748b', font: { size: 10 }, callback: v => '$' + v },
-          grid: { color: '#1e293b' }
+          grid: { color: '#1e293b' },
+          min: Math.floor(Math.min(...holdAvgData, ...holdStarData) * 0.995),
+          max: Math.ceil(Math.max(...holdAvgData, ...holdStarData) * 1.005)
         }
       }
     }
