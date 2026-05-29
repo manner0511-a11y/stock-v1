@@ -26,32 +26,96 @@ const DB_REF = firebaseDb.ref('stock_manager_v1');
 const auth = firebase.auth();
 const provider = new firebase.auth.GoogleAuthProvider();
 
+// ===== 세션 타임아웃 (1시간) =====
+const SESSION_TIMEOUT = 60 * 60 * 1000; // 1시간 (ms)
+let sessionCheckInterval = null;
+
+function getEmailKey(email) {
+  return email.endsWith('@gmail.com')
+    ? email.replace('@gmail.com', '')
+    : email.replace(/\./g, '_dot_');
+}
+
+function updateSessionActivity(emailKey) {
+  firebaseDb.ref('stock_manager_v1/sessions/' + emailKey).set({
+    lastActive: Date.now()
+  });
+}
+
+function startSessionWatch(emailKey) {
+  // 5분마다 활동 시각 갱신
+  sessionCheckInterval = setInterval(() => {
+    updateSessionActivity(emailKey);
+  }, 5 * 60 * 1000);
+
+  // 사용자 입력 시 활동 시각 갱신
+  ['click', 'keydown', 'touchstart'].forEach(evt => {
+    document.addEventListener(evt, () => updateSessionActivity(emailKey), { passive: true });
+  });
+
+  // 탭/브라우저 닫을 때 세션 삭제 (lastActive를 0으로 설정 → 다음 접속 시 만료 처리)
+  window.addEventListener('beforeunload', () => {
+    // sendBeacon으로 동기적 처리 (비동기 fetch는 탭 닫힐 때 취소될 수 있음)
+    const url = `https://stock-v1-b1417-default-rtdb.firebaseio.com/stock_manager_v1/sessions/${emailKey}/lastActive.json`;
+    navigator.sendBeacon(url, new Blob(['0'], { type: 'application/json' }));
+  });
+}
+
+function stopSessionWatch() {
+  if (sessionCheckInterval) {
+    clearInterval(sessionCheckInterval);
+    sessionCheckInterval = null;
+  }
+}
+
+async function checkSessionTimeout(emailKey) {
+  const snap = await firebaseDb.ref('stock_manager_v1/sessions/' + emailKey).get();
+  if (!snap.exists()) return false; // 세션 없음 → 새 로그인으로 처리
+  const lastActive = snap.val().lastActive || 0;
+  return (Date.now() - lastActive) > SESSION_TIMEOUT;
+}
+
 // ===== 인증 =====
 function signIn() {
   auth.signInWithPopup(provider).catch(err => alert('로그인 실패: ' + err.message));
 }
 function signOut() {
+  const user = auth.currentUser;
+  if (user) {
+    const emailKey = getEmailKey(user.email);
+    firebaseDb.ref('stock_manager_v1/sessions/' + emailKey).remove();
+  }
+  stopSessionWatch();
   auth.signOut();
 }
 
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   if (!user) {
-    // 로그인 안 된 상태 → 로그인 화면 표시
+    stopSessionWatch();
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('app-screen').style.display = 'none';
     return;
   }
 
-  // 로그인 됨 → 이메일 허용 여부 확인
   const email = user.email;
-  // gmail 계정명만 추출 (예: user@gmail.com → user)
-  const emailKey = email.endsWith('@gmail.com')
-    ? email.replace('@gmail.com', '')
-    : email.replace(/\./g, '_dot_');
+  const emailKey = getEmailKey(email);
 
+  // 세션 타임아웃 체크
+  const timedOut = await checkSessionTimeout(emailKey);
+  if (timedOut) {
+    await firebaseDb.ref('stock_manager_v1/sessions/' + emailKey).remove();
+    stopSessionWatch();
+    await auth.signOut();
+    alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+    return;
+  }
+
+  // 이메일 허용 여부 확인
   firebaseDb.ref('stock_manager_v1/allowed_emails/' + emailKey).get().then(snapshot => {
     if (snapshot.exists() && snapshot.val() === true) {
-      // 허용된 사용자
+      // 허용된 사용자 → 세션 갱신 후 앱 진입
+      updateSessionActivity(emailKey);
+      startSessionWatch(emailKey);
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app-screen').style.display = 'block';
       document.getElementById('user-name').textContent = user.displayName || email;
