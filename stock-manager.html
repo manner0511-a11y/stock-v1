@@ -157,6 +157,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0;
 .price-item .p-name { font-size: 11px; color: #64748b; }
 .price-item .p-val { font-size: 15px; font-weight: 700; }
 .price-item .p-chg { font-size: 11px; }
+.price-item .p-ext { font-size: 10px; color: #64748b; margin-top: 1px; white-space: nowrap; }
 .price-refresh { background: none; border: none; color: #64748b; cursor: pointer; font-size: 16px; padding: 4px; }
 .price-refresh:hover { color: #38bdf8; }
 .price-time { font-size: 10px; color: #475569; }
@@ -371,18 +372,21 @@ tr:hover td { background: #263548; }
         <div class="p-name">TQQQ</div>
         <div class="p-val tag-tqqq" id="price-tqqq">—</div>
         <div class="p-chg" id="chg-tqqq">—</div>
+        <div class="p-ext" id="ext-tqqq"></div>
       </div>
       <div style="width:1px;height:32px;background:#334155"></div>
       <div class="price-item">
         <div class="p-name">SOXL</div>
         <div class="p-val tag-soxl" id="price-soxl">—</div>
         <div class="p-chg" id="chg-soxl">—</div>
+        <div class="p-ext" id="ext-soxl"></div>
       </div>
       <div style="width:1px;height:32px;background:#334155"></div>
       <div class="price-item">
         <div class="p-name">FNGU</div>
         <div class="p-val tag-fngu" id="price-fngu">—</div>
         <div class="p-chg" id="chg-fngu">—</div>
+        <div class="p-ext" id="ext-fngu"></div>
       </div>
       <div>
         <button class="price-refresh" onclick="fetchPrices()" title="새로고침">🔄</button>
@@ -939,7 +943,13 @@ async function fetchPrice(symbol) {
       const prevClose = meta.chartPreviousClose || meta.previousClose;
       const change = price - prevClose;
       const changePct = (change / prevClose) * 100;
-      return { price, change, changePct, prevClose };
+      // 프리/애프터마켓
+      const marketState = meta.marketState; // PRE, REGULAR, POST, CLOSED
+      const prePrice = meta.preMarketPrice || null;
+      const preChangePct = meta.preMarketChangePercent || null;
+      const postPrice = meta.postMarketPrice || null;
+      const postChangePct = meta.postMarketChangePercent || null;
+      return { price, change, changePct, prevClose, marketState, prePrice, preChangePct, postPrice, postChangePct };
     } catch (e) {
       // 다음 프록시로
     }
@@ -951,39 +961,39 @@ async function fetchPrices() {
   document.getElementById('price-time').textContent = '조회 중..';
   const [tqqq, soxl, fngu] = await Promise.all([fetchPrice('TQQQ'), fetchPrice('SOXL'), fetchPrice('FNGU')]);
 
-  if (tqqq) {
-    livePrice.TQQQ = tqqq.price;
-    document.getElementById('price-tqqq').textContent = '$' + tqqq.price.toFixed(2);
-    const chgEl = document.getElementById('chg-tqqq');
-    chgEl.textContent = (tqqq.changePct >= 0 ? '+' : '') + tqqq.changePct.toFixed(2) + '%';
-    chgEl.className = 'p-chg ' + (tqqq.changePct >= 0 ? 'positive' : 'negative');
-  } else {
-    document.getElementById('price-tqqq').textContent = '—';
-    document.getElementById('chg-tqqq').textContent = '조회 실패';
-    document.getElementById('chg-tqqq').className = 'p-chg negative';
+  function updateTicker(data, priceId, chgId, extId) {
+    if (!data) {
+      document.getElementById(priceId).textContent = '—';
+      document.getElementById(chgId).textContent = '조회 실패';
+      document.getElementById(chgId).className = 'p-chg negative';
+      document.getElementById(extId).textContent = '';
+      return;
+    }
+    document.getElementById(priceId).textContent = '$' + data.price.toFixed(2);
+    const chgEl = document.getElementById(chgId);
+    chgEl.textContent = (data.changePct >= 0 ? '+' : '') + data.changePct.toFixed(2) + '%';
+    chgEl.className = 'p-chg ' + (data.changePct >= 0 ? 'positive' : 'negative');
+
+    // 프리/애프터마켓 표시
+    const extEl = document.getElementById(extId);
+    if (data.marketState === 'PRE' && data.prePrice) {
+      const pct = data.preChangePct ? (data.preChangePct >= 0 ? '+' : '') + data.preChangePct.toFixed(2) + '%' : '';
+      extEl.innerHTML = `<span style="color:#94a3b8">프리 $${data.prePrice.toFixed(2)}</span> <span class="${data.preChangePct >= 0 ? 'positive' : 'negative'}">${pct}</span>`;
+    } else if ((data.marketState === 'POST' || data.marketState === 'CLOSED') && data.postPrice) {
+      const pct = data.postChangePct ? (data.postChangePct >= 0 ? '+' : '') + data.postChangePct.toFixed(2) + '%' : '';
+      extEl.innerHTML = `<span style="color:#94a3b8">애프터 $${data.postPrice.toFixed(2)}</span> <span class="${data.postChangePct >= 0 ? 'positive' : 'negative'}">${pct}</span>`;
+    } else {
+      extEl.textContent = data.marketState === 'REGULAR' ? '정규장' : '';
+    }
   }
-  if (soxl) {
-    livePrice.SOXL = soxl.price;
-    document.getElementById('price-soxl').textContent = '$' + soxl.price.toFixed(2);
-    const chgEl = document.getElementById('chg-soxl');
-    chgEl.textContent = (soxl.changePct >= 0 ? '+' : '') + soxl.changePct.toFixed(2) + '%';
-    chgEl.className = 'p-chg ' + (soxl.changePct >= 0 ? 'positive' : 'negative');
-  } else {
-    document.getElementById('price-soxl').textContent = '—';
-    document.getElementById('chg-soxl').textContent = '조회 실패';
-    document.getElementById('chg-soxl').className = 'p-chg negative';
-  }
-  if (fngu) {
-    livePrice.FNGU = fngu.price;
-    document.getElementById('price-fngu').textContent = '$' + fngu.price.toFixed(2);
-    const chgEl = document.getElementById('chg-fngu');
-    chgEl.textContent = (fngu.changePct >= 0 ? '+' : '') + fngu.changePct.toFixed(2) + '%';
-    chgEl.className = 'p-chg ' + (fngu.changePct >= 0 ? 'positive' : 'negative');
-  } else {
-    document.getElementById('price-fngu').textContent = '—';
-    document.getElementById('chg-fngu').textContent = '조회 실패';
-    document.getElementById('chg-fngu').className = 'p-chg negative';
-  }
+
+  if (tqqq) livePrice.TQQQ = tqqq.price;
+  if (soxl) livePrice.SOXL = soxl.price;
+  if (fngu) livePrice.FNGU = fngu.price;
+
+  updateTicker(tqqq, 'price-tqqq', 'chg-tqqq', 'ext-tqqq');
+  updateTicker(soxl, 'price-soxl', 'chg-soxl', 'ext-soxl');
+  updateTicker(fngu, 'price-fngu', 'chg-fngu', 'ext-fngu');
   const now = new Date();
   const allFailed = !tqqq && !soxl && !fngu;
   document.getElementById('price-time').textContent = allFailed
