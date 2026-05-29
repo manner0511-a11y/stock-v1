@@ -240,6 +240,8 @@ tr:hover td { background: #263548; }
 @media (max-width: 768px) {
   /* 컨테이너 패딩 축소 */
   .container { padding: 12px; }
+  /* 요약 카드 6개 → 2열 */
+  #summary-cards { grid-template-columns: repeat(2, 1fr) !important; }
 
   /* 헤더 */
   .header { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 16px; }
@@ -401,13 +403,14 @@ tr:hover td { background: #263548; }
   <button class="nav-btn" onclick="showPage('cycles', this)">사이클 관리</button>
   <button class="nav-btn" onclick="showPage('calculator', this)">매매 계산기</button>
   <button class="nav-btn" onclick="showPage('history', this)">손익 정리</button>
+  <button class="nav-btn" onclick="showPage('simulation', this)">📊 손실 대응</button>
 </div>
 
 <div class="container">
 
   <!-- 대시보드 -->
   <div id="page-dashboard" class="page active">
-    <div class="grid-4" id="summary-cards"></div>
+    <div class="grid-4" id="summary-cards" style="grid-template-columns:repeat(6,1fr)"></div>
     <div class="grid-2">
       <div>
         <div class="section-header"><h2>진행 중인 사이클</h2></div>
@@ -565,6 +568,105 @@ tr:hover td { background: #263548; }
         <thead><tr><th>#</th><th>종목</th><th>원금($)</th><th>시작일</th><th>종료일</th><th>기간</th><th>투자금($)</th><th>수익금($)</th><th>원금대비(%)</th><th>투자대비(%)</th><th>상태</th></tr></thead>
         <tbody id="history-table"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- 손실 대응 시뮬레이션 -->
+  <div id="page-simulation" class="page">
+    <div class="section-header"><h2>📊 손실 구간 대응 시뮬레이션</h2></div>
+
+    <!-- 사이클 선택 -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="font-size:13px;color:#94a3b8">사이클 선택</label>
+        <select id="sim-cycle-id" onchange="simLoad()" style="padding:8px 12px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0;font-size:14px;min-width:200px"></select>
+      </div>
+      <!-- 현재 상태 요약 -->
+      <div id="sim-status" style="margin-top:16px;display:none">
+        <div class="grid-4" id="sim-status-cards"></div>
+        <!-- 별지점% 상태 바 -->
+        <div style="margin-top:8px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px">
+            <span>별지점% 상태</span>
+            <span id="sim-star-pct-label"></span>
+          </div>
+          <div style="background:#0f172a;border-radius:4px;height:8px;overflow:hidden">
+            <div id="sim-star-pct-bar" style="height:100%;border-radius:4px;transition:width 0.3s"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="sim-scenarios" style="display:none">
+      <div class="grid-3">
+
+        <!-- 시나리오 1: 원금 증액 -->
+        <div class="card">
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px">💰 원금 증액</div>
+          <div style="font-size:12px;color:#64748b;margin-bottom:16px">원금을 늘려 T값을 희석하고 별지점%를 회복</div>
+          <div class="form-group">
+            <label>증액 후 원금 ($)</label>
+            <input type="number" id="sim-new-principal" step="100" oninput="simCalcPrincipal()">
+          </div>
+          <div id="sim-principal-result" style="margin-top:8px"></div>
+          <!-- 빠른 선택 버튼 -->
+          <div style="margin-top:12px">
+            <div style="font-size:11px;color:#64748b;margin-bottom:6px">목표 별지점% 달성을 위한 필요 원금</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap" id="sim-principal-targets"></div>
+          </div>
+        </div>
+
+        <!-- 시나리오 2: 손절 후 재시작 -->
+        <div class="card">
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px">✂️ 손절 후 재시작</div>
+          <div style="font-size:12px;color:#64748b;margin-bottom:16px">현재 손절 시 손실 확정 후 새 사이클 회복 분석</div>
+          <div class="form-group">
+            <label style="display:flex;justify-content:space-between">
+              현재 주가 ($)
+              <button class="btn btn-secondary btn-sm" onclick="simFillPrice()">현재가</button>
+            </label>
+            <input type="number" id="sim-cut-price" step="0.01" oninput="simCalcCutloss()">
+          </div>
+          <div id="sim-cutloss-result" style="margin-top:8px"></div>
+        </div>
+
+        <!-- 시나리오 3: 버티기 -->
+        <div class="card">
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px">⏳ 버티기</div>
+          <div style="font-size:12px;color:#64748b;margin-bottom:16px">현재 보유 상태에서 별지점 도달에 필요한 주가</div>
+          <div id="sim-hold-result" style="margin-top:8px"></div>
+          <div style="margin-top:16px">
+            <div class="form-group">
+              <label>추가 매수 금액 ($) <span style="font-size:11px;color:#64748b">— 그래프 범위 조정</span></label>
+              <input type="number" id="sim-extra-buy" step="100" placeholder="예: 10000" oninput="simCalcHold()">
+            </div>
+            <div id="sim-hold-extra-result"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 차트 행 -->
+      <div class="grid-3" style="margin-top:0">
+        <div class="card">
+          <div style="font-size:12px;color:#64748b;margin-bottom:8px">💰 원금 증액 → 별지점$ 변화</div>
+          <div style="position:relative;height:200px"><canvas id="sim-chart-principal"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-size:12px;color:#64748b;margin-bottom:8px">✂️ 새 사이클 수익률별 누적 손익</div>
+          <div style="position:relative;height:200px"><canvas id="sim-chart-cutloss"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-size:12px;color:#64748b;margin-bottom:8px">⏳ 추가 매수 금액 → 별지점$ / 평단가</div>
+          <div style="position:relative;height:200px"><canvas id="sim-chart-hold"></canvas></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="sim-empty" style="text-align:center;padding:60px 20px;color:#475569">
+      <div style="font-size:48px;margin-bottom:12px">📊</div>
+      <p>진행 중인 사이클을 선택하세요</p>
     </div>
   </div>
 
@@ -1010,6 +1112,7 @@ function showPage(name, btn) {
   if (name === 'cycles') renderCycles();
   if (name === 'calculator') { calcTickerChange(); }
   if (name === 'history') renderHistory();
+  if (name === 'simulation') renderSimulation();
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
@@ -1025,11 +1128,26 @@ function renderDashboard() {
   const totalPrincipal = done.reduce((s, c) => s + c.principal, 0);
   const totalRoi = totalPrincipal > 0 ? (totalProfit / totalPrincipal * 100) : 0;
 
+  // 진행 중 사이클 평가 손익 계산
+  let evalProfit = 0, evalPrincipal = 0, hasPrice = false;
+  active.forEach(c => {
+    const { avg, qty } = calcCurrentAvgAndQty(c.trades || []);
+    const curPrice = livePrice[c.ticker];
+    if (curPrice && avg > 0 && qty > 0) {
+      evalProfit += (curPrice - avg) * qty;
+      evalPrincipal += c.principal;
+      hasPrice = true;
+    }
+  });
+  const evalRoi = evalPrincipal > 0 ? (evalProfit / evalPrincipal * 100) : 0;
+
   document.getElementById('summary-cards').innerHTML = `
     <div class="card"><div class="card-title">진행 중 사이클</div><div class="card-value positive">${active.length}</div></div>
     <div class="card"><div class="card-title">완료 사이클</div><div class="card-value neutral">${done.length}</div></div>
-    <div class="card"><div class="card-title">총 실현 수익</div><div class="card-value ${totalProfit>=0?'positive':'negative'}">$${totalProfit.toFixed(2)}</div></div>
-    <div class="card"><div class="card-title">원금대비 수익률</div><div class="card-value ${totalRoi>=0?'positive':'negative'}">${totalRoi.toFixed(2)}%</div></div>
+    <div class="card"><div class="card-title">총 실현 수익</div><div class="card-value ${totalProfit>=0?'positive':'negative'}">$${totalProfit.toFixed(2)}</div><div style="font-size:10px;color:#475569;margin-top:4px">완료 사이클 수익금 합계</div></div>
+    <div class="card"><div class="card-title">원금대비 수익률</div><div class="card-value ${totalRoi>=0?'positive':'negative'}">${totalRoi.toFixed(2)}%</div><div style="font-size:10px;color:#475569;margin-top:4px">수익금 합계 ÷ 원금 합계</div></div>
+    <div class="card"><div class="card-title">평가 손익 (진행 중)</div><div class="card-value ${evalProfit>=0?'positive':'negative'}">${hasPrice ? (evalProfit>=0?'+':'')+'$'+evalProfit.toFixed(2) : '—'}</div><div style="font-size:10px;color:#475569;margin-top:4px">(현재가 - 평단가) × 보유수량</div></div>
+    <div class="card"><div class="card-title">평가 수익률 (진행 중)</div><div class="card-value ${evalRoi>=0?'positive':'negative'}">${hasPrice ? (evalRoi>=0?'+':'')+evalRoi.toFixed(2)+'%' : '—'}</div><div style="font-size:10px;color:#475569;margin-top:4px">평가 손익 ÷ 원금 합계</div></div>
   `;
 
   const activeList = document.getElementById('active-cycles-list');
@@ -1598,8 +1716,8 @@ function calcUpdate() {
           <tr style="border-bottom:1px solid #1e293b">
             <td style="padding:6px 8px;color:#fbbf24;font-weight:600">${isLossZone ? '절손 지정가' : '지정가 매도'}</td>
             <td style="padding:6px 8px;font-weight:700;color:${isLossZone?'#fca5a5':'#fbbf24'}">$${sellPrice20.toFixed(2)}</td>
-            <td style="padding:6px 8px;text-align:center">전량</td>
-            <td style="padding:6px 8px;color:#64748b;font-size:11px">20% 고정</td>
+            <td style="padding:6px 8px;text-align:center">${qty - locSellQty}주</td>
+            <td style="padding:6px 8px;color:#64748b;font-size:11px">20% 고정 | 보유(${qty}) - LOC(${locSellQty})</td>
           </tr>
           <tr>
             <td style="padding:6px 8px;color:#94a3b8">보유수량</td>
@@ -2248,6 +2366,410 @@ function renderHistory() {
           <td>${c.status==='active'?'<span class="badge badge-green">진행중</span>':'<span class="badge badge-gray">완료</span>'}</td>
         </tr>`;
       }).join('');
+}
+
+// ===== 손실 대응 시뮬레이션 =====
+let simCycle = null;
+let simChartPrincipal = null;
+let simChartCutloss = null;
+let simChartHold = null;
+
+function renderSimulation() {
+  const active = db.cycles.filter(c => c.status === 'active');
+  const sel = document.getElementById('sim-cycle-id');
+  const prev = sel.value;
+  sel.innerHTML = active.length === 0
+    ? '<option value="">진행 중인 사이클 없음</option>'
+    : active.map(c => `<option value="${c.id}">${c.ticker} Cycle #${c.cycleNum} (${c.startdate})</option>`).join('');
+  if (prev && active.find(c => c.id === prev)) sel.value = prev;
+  simLoad();
+}
+
+function simLoad() {
+  const id = document.getElementById('sim-cycle-id').value;
+  const c = db.cycles.find(x => x.id === id);
+  simCycle = c || null;
+
+  if (!c) {
+    document.getElementById('sim-status').style.display = 'none';
+    document.getElementById('sim-scenarios').style.display = 'none';
+    document.getElementById('sim-empty').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('sim-empty').style.display = 'none';
+  document.getElementById('sim-status').style.display = 'block';
+  document.getElementById('sim-scenarios').style.display = 'block';
+
+  const daily = getCurrentDailyBudget(c);
+  const T = calcTWithHistory(c.trades || [], c);
+  const { avg, qty } = calcCurrentAvgAndQty(c.trades || []);
+  const starPct = calcStarPoint(c.ticker, c.split, T);
+  const starPrice = avg > 0 ? avg * (1 + starPct) : 0;
+  const invested = calcTotalInvested(c.trades || []);
+  const consumedPct = c.principal > 0 ? (invested / c.principal * 100) : 0;
+  const curPrice = livePrice[c.ticker];
+  const roi = (curPrice && avg > 0) ? ((curPrice - avg) / avg * 100) : null;
+
+  // 상태 색상
+  const starColor = starPct <= 0 ? '#ef4444' : starPct < 0.05 ? '#f59e0b' : '#10b981';
+  const starLabel = starPct <= 0 ? '🔴 위험' : starPct < 0.05 ? '🟡 주의' : '🟢 정상';
+
+  document.getElementById('sim-status-cards').innerHTML = `
+    <div class="card"><div class="card-title">T값</div><div class="card-value">${T.toFixed(2)}</div></div>
+    <div class="card"><div class="card-title">평단가</div><div class="card-value">$${avg.toFixed(2)}</div></div>
+    <div class="card"><div class="card-title">별지점%</div><div class="card-value" style="color:${starColor}">${(starPct*100).toFixed(2)}% ${starLabel}</div></div>
+    <div class="card"><div class="card-title">원금 소진율</div><div class="card-value" style="color:${consumedPct>=80?'#ef4444':consumedPct>=50?'#f59e0b':'#10b981'}">${consumedPct.toFixed(1)}%</div></div>
+  `;
+
+  // 별지점% 상태 바
+  const barPct = Math.max(0, Math.min(100, starPct * 100 / 20 * 100)); // 20%를 최대로
+  document.getElementById('sim-star-pct-bar').style.width = barPct + '%';
+  document.getElementById('sim-star-pct-bar').style.background = starColor;
+  document.getElementById('sim-star-pct-label').textContent = `${(starPct*100).toFixed(2)}% (별지점: $${starPrice.toFixed(2)})`;
+
+  // 원금 증액 입력 초기값
+  document.getElementById('sim-new-principal').value = c.principal;
+
+  // 목표 별지점% 달성 필요 원금 계산 (5%, 10%, 15%, 20%)
+  const targets = [5, 10, 15, 20];
+  const ticker = c.ticker;
+  const split = c.split;
+  document.getElementById('sim-principal-targets').innerHTML = targets.map(targetPct => {
+    // starPct = (base - T_new) / 100, T_new = invested_new / (newPrincipal/split)
+    // 역산: newPrincipal = invested / (base/100 - targetPct/100) / split * split ... 복잡하므로 T 고정 후 역산
+    // calcStarPoint(ticker, split, T) = targetPct/100 → T 고정, 역산 불가 → newPrincipal 역산
+    // T_new = invested / (newPrincipal/split) → starPct = f(T_new)
+    // SOXL/FNGU split40: (20 - T)/100 = targetPct/100 → T = 20 - targetPct
+    // T_new = invested / (newPrincipal/split) = 20 - targetPct
+    // newPrincipal = invested * split / (20 - targetPct)
+    let base = 20;
+    let coeff = 1;
+    if (ticker === 'TQQQ') { base = 15; coeff = split === 40 ? 0.75 : split === 20 ? 1.5 : 1; }
+    else { base = 20; coeff = split === 40 ? 1 : split === 20 ? 2 : 1.5; }
+    const targetT = (base - targetPct) / coeff;
+    if (targetT <= 0) return '';
+    const needed = invested / targetT * split;
+    if (needed <= c.principal) return '';
+    const increase = needed - c.principal;
+    return `<button class="btn btn-secondary btn-sm" onclick="document.getElementById('sim-new-principal').value=${needed.toFixed(0)};simCalcPrincipal()" title="목표 별지점 ${targetPct}% 달성">
+      +${targetPct}% → $${needed.toFixed(0)}<br><span style="font-size:10px;color:#64748b">+$${increase.toFixed(0)}</span>
+    </button>`;
+  }).join('');
+
+  // 손절 현재가 자동 채움
+  if (curPrice) document.getElementById('sim-cut-price').value = curPrice.toFixed(2);
+
+  simCalcPrincipal();
+  simCalcCutloss();
+  simCalcHold();
+}
+
+function simFillPrice() {
+  if (!simCycle) return;
+  const p = livePrice[simCycle.ticker];
+  if (p) { document.getElementById('sim-cut-price').value = p.toFixed(2); simCalcCutloss(); }
+  else alert('상단 🔄 버튼으로 주가를 먼저 조회해주세요.');
+}
+
+function simCalcPrincipal() {
+  if (!simCycle) return;
+  const c = simCycle;
+  const newPrincipal = parseFloat(document.getElementById('sim-new-principal').value) || 0;
+  const invested = calcTotalInvested(c.trades || []);
+  const { avg, qty } = calcCurrentAvgAndQty(c.trades || []);
+
+  if (newPrincipal <= 0) { document.getElementById('sim-principal-result').innerHTML = ''; return; }
+
+  const newDaily = newPrincipal / c.split;
+  const newT = invested / newDaily;
+  const newStarPct = calcStarPoint(c.ticker, c.split, newT);
+  const newStarPrice = avg > 0 ? avg * (1 + newStarPct) : 0;
+  const increase = newPrincipal - c.principal;
+  const starColor = newStarPct <= 0 ? '#ef4444' : newStarPct < 0.05 ? '#f59e0b' : '#10b981';
+
+  document.getElementById('sim-principal-result').innerHTML = `
+    <div style="background:#0f172a;border-radius:8px;padding:12px;border:1px solid #334155">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><div style="font-size:11px;color:#64748b">증액 금액</div><div style="font-size:14px;font-weight:600;color:${increase>0?'#38bdf8':'#94a3b8'}">${increase>0?'+':''}$${increase.toFixed(0)}</div></div>
+        <div><div style="font-size:11px;color:#64748b">새 T값</div><div style="font-size:14px;font-weight:600">${newT.toFixed(2)}</div></div>
+        <div><div style="font-size:11px;color:#64748b">새 별지점%</div><div style="font-size:14px;font-weight:600;color:${starColor}">${(newStarPct*100).toFixed(2)}%</div></div>
+        <div><div style="font-size:11px;color:#64748b">새 별지점$</div><div style="font-size:14px;font-weight:600;color:${starColor}">$${newStarPrice.toFixed(2)}</div></div>
+      </div>
+      ${newStarPct > 0 ? `<div style="margin-top:8px;padding:6px 10px;background:#064e3b;border-radius:6px;font-size:12px;color:#6ee7b7">✅ 별지점 회복 가능</div>` : `<div style="margin-top:8px;padding:6px 10px;background:#7f1d1d;border-radius:6px;font-size:12px;color:#fecaca">⚠️ 원금이 부족합니다</div>`}
+    </div>
+  `;
+
+  // 원금 증액 차트: 현재 원금 ~ 현재 원금*3 구간에서 별지점$ 변화
+  const steps = 20;
+  const minP = c.principal;
+  const maxP = Math.max(newPrincipal * 1.2, c.principal * 3);
+  const pLabels = [], pData = [];
+  for (let i = 0; i <= steps; i++) {
+    const p = minP + (maxP - minP) * i / steps;
+    const t = invested / (p / c.split);
+    const sp = calcStarPoint(c.ticker, c.split, t);
+    const starPrice = avg > 0 ? avg * (1 + sp) : 0;
+    pLabels.push(Math.round(p / 1000) + 'k');
+    pData.push(parseFloat(starPrice.toFixed(2)));
+  }
+  // 현재 입력값 위치 강조 (가장 가까운 인덱스 찾기)
+  const selectedIdx = Math.round((newPrincipal - minP) / (maxP - minP) * steps);
+  const clampedIdx = Math.max(0, Math.min(steps, selectedIdx));
+
+  const ctxP = document.getElementById('sim-chart-principal');
+  if (simChartPrincipal) simChartPrincipal.destroy();
+  simChartPrincipal = new Chart(ctxP, {
+    type: 'line',
+    data: {
+      labels: pLabels,
+      datasets: [
+        {
+          label: '별지점$',
+          data: pData,
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16,185,129,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: pData.map((_, i) => i === clampedIdx ? 7 : 3),
+          pointBackgroundColor: pData.map((v, i) => i === clampedIdx ? '#38bdf8' : v <= avg ? '#ef4444' : v < avg * 1.05 ? '#f59e0b' : '#10b981'),
+          pointBorderColor: pData.map((_, i) => i === clampedIdx ? '#fff' : 'transparent'),
+          pointBorderWidth: pData.map((_, i) => i === clampedIdx ? 2 : 0),
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `별지점$: $${ctx.parsed.y.toFixed(2)}${ctx.dataIndex === clampedIdx ? ' ◀ 선택' : ''}` } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '원금 ($)', color: '#64748b', font: { size: 10 } },
+          ticks: { color: '#64748b', font: { size: 10 } },
+          grid: { color: '#1e293b' }
+        },
+        y: {
+          title: { display: true, text: '별지점$ ($)', color: '#64748b', font: { size: 10 } },
+          ticks: { color: '#64748b', font: { size: 10 }, callback: v => '$' + v },
+          grid: { color: '#1e293b' }
+        }
+      }
+    }
+  });
+}
+
+function simCalcCutloss() {
+  if (!simCycle) return;
+  const c = simCycle;
+  const cutPrice = parseFloat(document.getElementById('sim-cut-price').value) || 0;
+  const { avg, qty } = calcCurrentAvgAndQty(c.trades || []);
+  const invested = calcTotalInvested(c.trades || []);
+
+  if (!cutPrice || !qty) { document.getElementById('sim-cutloss-result').innerHTML = ''; return; }
+
+  const sellAmt = cutPrice * qty;
+  const loss = sellAmt - invested;
+  const lossPct = invested > 0 ? (loss / c.principal * 100) : 0;
+  // 새 사이클에서 회복하려면 필요한 수익률
+  const recoveryRoi = c.principal > 0 ? (Math.abs(loss) / c.principal * 100) : 0;
+  const lossColor = loss >= 0 ? '#10b981' : '#ef4444';
+
+  const done = db.cycles.filter(x => x.status === 'done' && x.settle);
+
+  document.getElementById('sim-cutloss-result').innerHTML = `
+    <div style="background:#0f172a;border-radius:8px;padding:12px;border:1px solid #334155">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><div style="font-size:11px;color:#64748b">매도 금액</div><div style="font-size:14px;font-weight:600">$${sellAmt.toFixed(2)}</div></div>
+        <div><div style="font-size:11px;color:#64748b">손익</div><div style="font-size:14px;font-weight:600;color:${lossColor}">${loss>=0?'+':''}$${loss.toFixed(2)}</div></div>
+        <div><div style="font-size:11px;color:#64748b">원금대비 손실</div><div style="font-size:14px;font-weight:600;color:${lossColor}">${lossPct.toFixed(2)}%</div></div>
+        <div><div style="font-size:11px;color:#64748b">회복 필요 수익률</div><div style="font-size:14px;font-weight:600;color:#f59e0b">${recoveryRoi.toFixed(2)}%</div></div>
+      </div>
+      ${loss < 0
+        ? `<div style="margin-top:8px;padding:6px 10px;background:#451a03;border-radius:6px;font-size:12px;color:#fcd34d">
+            💡 다음 사이클에서 원금대비 <b>${recoveryRoi.toFixed(1)}%</b> 수익 시 손실 만회
+           </div>`
+        : `<div style="margin-top:8px;padding:6px 10px;background:#064e3b;border-radius:6px;font-size:12px;color:#6ee7b7">✅ 현재가 매도 시 수익 실현 가능</div>`}
+    </div>
+  `;
+
+  // 손절 차트: 다음 사이클 수익률별 손절 후 누적 손익
+  const roiSteps = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20];
+  const cycleData = roiSteps.map(r => parseFloat((loss + c.principal * r / 100).toFixed(2)));
+  const breakEvenIdx = cycleData.findIndex(v => v >= 0);
+  const cycleBarColors = cycleData.map((v, i) => {
+    if (i === breakEvenIdx) return 'rgba(56,189,248,0.9)';
+    return v >= 0 ? 'rgba(16,185,129,0.7)' : 'rgba(239,68,68,0.7)';
+  });
+
+  const ctxC = document.getElementById('sim-chart-cutloss');
+  if (simChartCutloss) simChartCutloss.destroy();
+  simChartCutloss = new Chart(ctxC, {
+    type: 'bar',
+    data: {
+      labels: roiSteps.map(r => r + '%'),
+      datasets: [{
+        label: '누적 손익',
+        data: cycleData,
+        backgroundColor: cycleBarColors,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          title: ctx => `다음 사이클 수익률: ${ctx[0].label}`,
+          label: ctx => `손절 후 누적 손익: ${ctx.parsed.y >= 0 ? '+' : ''}$${ctx.parsed.y.toFixed(0)}${ctx.dataIndex === breakEvenIdx ? ' ← 손실 만회' : ''}`
+        }}
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '다음 사이클 수익률 (원금대비)', color: '#64748b', font: { size: 10 } },
+          ticks: { color: '#64748b', font: { size: 10 } },
+          grid: { color: '#1e293b' }
+        },
+        y: {
+          title: { display: true, text: '누적 손익 ($)', color: '#64748b', font: { size: 10 } },
+          ticks: { color: '#64748b', font: { size: 10 }, callback: v => '$' + v },
+          grid: { color: '#1e293b' }
+        }
+      }
+    }
+  });
+}
+
+function simCalcHold() {
+  if (!simCycle) return;
+  const c = simCycle;
+  const T = calcTWithHistory(c.trades || [], c);
+  const { avg, qty } = calcCurrentAvgAndQty(c.trades || []);
+  const starPct = calcStarPoint(c.ticker, c.split, T);
+  const starPrice = avg > 0 ? avg * (1 + starPct) : 0;
+  const curPrice = livePrice[c.ticker];
+  const invested = calcTotalInvested(c.trades || []);
+
+  // 버티기 기본 정보
+  const needRise = avg > 0 && starPrice > 0 ? ((starPrice - (curPrice||avg)) / (curPrice||avg) * 100) : null;
+  const riseColor = needRise === null ? '#94a3b8' : needRise <= 0 ? '#10b981' : '#f59e0b';
+
+  let holdHtml = `
+    <div style="background:#0f172a;border-radius:8px;padding:12px;border:1px solid #334155">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><div style="font-size:11px;color:#64748b">별지점 목표가</div><div style="font-size:14px;font-weight:600;color:#10b981">$${starPrice.toFixed(2)}</div></div>
+        <div><div style="font-size:11px;color:#64748b">현재가</div><div style="font-size:14px;font-weight:600">${curPrice ? '$'+curPrice.toFixed(2) : '—'}</div></div>
+        <div><div style="font-size:11px;color:#64748b">필요 상승률</div><div style="font-size:14px;font-weight:600;color:${riseColor}">${needRise !== null ? (needRise<=0?'✅ 도달':'+'+(needRise.toFixed(2))+'%') : '—'}</div></div>
+        <div><div style="font-size:11px;color:#64748b">예상 수익금</div><div style="font-size:14px;font-weight:600;color:#10b981">$${avg>0&&qty>0?((starPrice-avg)*qty).toFixed(2):'—'}</div></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('sim-hold-result').innerHTML = holdHtml;
+
+  // 추가 매수 시뮬레이션 (그래프용 고정 범위 사용)
+  const buyPrice = curPrice || avg;
+  const extraBuy = parseFloat(document.getElementById('sim-extra-buy').value) || 0;
+
+  // 입력값 기준 결과 표시
+  if (extraBuy > 0 && buyPrice > 0) {
+    const eQty = Math.floor(extraBuy / buyPrice);
+    const eInvested = invested + extraBuy;
+    const eQtyTotal = qty + eQty;
+    const eAvg = eQtyTotal > 0 ? (avg * qty + buyPrice * eQty) / eQtyTotal : avg;
+    const daily = getCurrentDailyBudget(c);
+    const eT = eInvested / daily;
+    const eStarPct = calcStarPoint(c.ticker, c.split, eT);
+    const eStarPrice = eAvg > 0 ? eAvg * (1 + eStarPct) : 0;
+    const starColor = eStarPct <= 0 ? '#ef4444' : eStarPct < 0.05 ? '#f59e0b' : '#10b981';
+    document.getElementById('sim-hold-extra-result').innerHTML = `
+      <div style="background:#0f172a;border-radius:8px;padding:10px 12px;border:1px solid #334155;margin-top:4px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><div style="font-size:11px;color:#64748b">추가 수량</div><div style="font-size:13px;font-weight:600">${eQty}주</div></div>
+          <div><div style="font-size:11px;color:#64748b">새 평단가</div><div style="font-size:13px;font-weight:600">$${eAvg.toFixed(2)}</div></div>
+          <div><div style="font-size:11px;color:#64748b">새 별지점$</div><div style="font-size:13px;font-weight:600;color:${starColor}">$${eStarPrice.toFixed(2)}</div></div>
+          <div><div style="font-size:11px;color:#64748b">새 별지점%</div><div style="font-size:13px;font-weight:600;color:${starColor}">${(eStarPct*100).toFixed(2)}%</div></div>
+        </div>
+      </div>`;
+  } else {
+    document.getElementById('sim-hold-extra-result').innerHTML = '';
+  }
+
+  // 버티기 차트: 추가 매수 금액 0 ~ max(입력값*2, invested*0.5) 구간
+  const holdSteps = 10;
+  const maxExtra = Math.max(extraBuy * 2, invested * 0.5, 5000);
+  const selectedHoldIdx = extraBuy > 0 ? Math.round(extraBuy / maxExtra * holdSteps) : -1;
+  const holdLabels = [], holdStarData = [], holdAvgData = [];
+  for (let i = 0; i <= holdSteps; i++) {
+    const extra = maxExtra * i / holdSteps;
+    const eQty = buyPrice > 0 ? Math.floor(extra / buyPrice) : 0;
+    const eInvested = invested + extra;
+    const eQtyTotal = qty + eQty;
+    // 평단가: 기존 투자금 + 추가 매수금 / 총 수량
+    const eAvg = eQtyTotal > 0 ? (avg * qty + buyPrice * eQty) / eQtyTotal : avg;
+    const daily = getCurrentDailyBudget(c);
+    const eT = eInvested / daily;
+    const eStarPct = calcStarPoint(c.ticker, c.split, eT);
+    const eStarPrice = eAvg > 0 ? eAvg * (1 + eStarPct) : 0;
+    holdLabels.push(maxExtra >= 10000 ? Math.round(extra / 1000) + 'k' : Math.round(extra));
+    holdStarData.push(parseFloat(eStarPrice.toFixed(2)));
+    holdAvgData.push(parseFloat(eAvg.toFixed(2)));
+  }
+  const ctxH = document.getElementById('sim-chart-hold');
+  if (simChartHold) simChartHold.destroy();
+  simChartHold = new Chart(ctxH, {
+    type: 'line',
+    data: {
+      labels: holdLabels,
+      datasets: [
+        {
+          label: '별지점$',
+          data: holdStarData,
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16,185,129,0.05)',
+          fill: false, tension: 0.3,
+          pointRadius: holdStarData.map((_, i) => i === selectedHoldIdx ? 7 : 3),
+          pointBackgroundColor: holdStarData.map((_, i) => i === selectedHoldIdx ? '#38bdf8' : '#10b981'),
+          pointBorderColor: holdStarData.map((_, i) => i === selectedHoldIdx ? '#fff' : 'transparent'),
+          pointBorderWidth: holdStarData.map((_, i) => i === selectedHoldIdx ? 2 : 0),
+        },
+        {
+          label: '평단가$',
+          data: holdAvgData,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245,158,11,0.05)',
+          fill: false, tension: 0.3,
+          pointRadius: holdAvgData.map((_, i) => i === selectedHoldIdx ? 7 : 3),
+          pointBackgroundColor: holdAvgData.map((_, i) => i === selectedHoldIdx ? '#38bdf8' : '#f59e0b'),
+          pointBorderColor: holdAvgData.map((_, i) => i === selectedHoldIdx ? '#fff' : 'transparent'),
+          pointBorderWidth: holdAvgData.map((_, i) => i === selectedHoldIdx ? 2 : 0),
+          borderDash: [4, 3]
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 12 } },
+        tooltip: { callbacks: {
+          title: ctx => `추가 매수: ${ctx[0].label}`,
+          label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`
+        }}
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '추가 매수 금액', color: '#64748b', font: { size: 10 } },
+          ticks: { color: '#64748b', font: { size: 10 } },
+          grid: { color: '#1e293b' }
+        },
+        y: {
+          title: { display: true, text: '주가 ($)', color: '#64748b', font: { size: 10 } },
+          ticks: { color: '#64748b', font: { size: 10 }, callback: v => '$' + v },
+          grid: { color: '#1e293b' }
+        }
+      }
+    }
+  });
 }
 
 // ===== 내보내기/가져오기 =====
