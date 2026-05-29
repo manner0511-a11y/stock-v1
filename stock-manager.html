@@ -598,11 +598,11 @@ tr:hover td { background: #263548; }
     </div>
 
     <div id="sim-scenarios" style="display:none">
-      <div class="grid-3">
+      <div class="grid-3" style="align-items:stretch">
 
         <!-- 시나리오 1: 원금 증액 -->
-        <div>
-          <div class="card">
+        <div style="display:flex;flex-direction:column">
+          <div class="card" style="flex:1">
             <div style="font-size:15px;font-weight:700;margin-bottom:4px">💰 원금 증액</div>
             <div style="font-size:12px;color:#64748b;margin-bottom:16px">원금을 늘려 T값을 희석하고 별지점%를 회복</div>
             <div class="form-group">
@@ -622,8 +622,8 @@ tr:hover td { background: #263548; }
         </div>
 
         <!-- 시나리오 2: 손절 후 재시작 -->
-        <div>
-          <div class="card">
+        <div style="display:flex;flex-direction:column">
+          <div class="card" style="flex:1">
             <div style="font-size:15px;font-weight:700;margin-bottom:4px">✂️ 손절 후 재시작</div>
             <div style="font-size:12px;color:#64748b;margin-bottom:16px">현재 손절 시 손실 확정 후 새 사이클 회복 분석</div>
             <div class="form-group">
@@ -642,8 +642,8 @@ tr:hover td { background: #263548; }
         </div>
 
         <!-- 시나리오 3: 버티기 -->
-        <div>
-          <div class="card">
+        <div style="display:flex;flex-direction:column">
+          <div class="card" style="flex:1">
             <div style="font-size:15px;font-weight:700;margin-bottom:4px">⏳ 버티기</div>
             <div style="font-size:12px;color:#64748b;margin-bottom:16px">현재 보유 상태에서 별지점 도달에 필요한 주가</div>
             <div id="sim-hold-result" style="margin-top:8px"></div>
